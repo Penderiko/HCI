@@ -1,13 +1,17 @@
 package com.example.penderiko.speechrecognizertestbed;
 
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.ContactsContract;
 import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.Voice;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
@@ -16,32 +20,59 @@ import android.widget.TextView;
 
 import java.util.List;
 import java.util.Random;
+import java.util.Vector;
+import java.util.jar.Manifest;
 
 public class SpeechRecognizerTestMain extends AppCompatActivity {
 
-    private Intent SRIntent;
+    private static final int PERMISSIONS_CORE = 0;
+
+    Intent SRIntent;
     private static final int SPEECH_2_TEXT_REQUEST = 0;
     private static final int SPEECH_2_TEXT_CONFIRMATION = 1;
     private Random rnd = new Random();
-    private TextToSpeech tts;
+    TextToSpeech tts;
+    private SRListener listener;
     private String match;
     private String number;
     //private ConditionVariable ttsInitialized = new ConditionVariable(false);
-   // private SpeechRecognizer sro;
+    SpeechRecognizer sro;
+
+    private void checkAndRequestAllPermissions() {
+        Vector<String> permissionRequests = new Vector<>();
+        checkAndPushRequests(android.Manifest.permission.RECORD_AUDIO,permissionRequests);
+        checkAndPushRequests(android.Manifest.permission.READ_CONTACTS,permissionRequests);
+        checkAndPushRequests(android.Manifest.permission.CALL_PHONE, permissionRequests);
+        if (permissionRequests.size()>0)
+            ActivityCompat.requestPermissions(this, permissionRequests.toArray(new String[permissionRequests.size()]), PERMISSIONS_CORE);
+    };
+
+    private void checkAndPushRequests(String permission, Vector<String> requests) {
+        if (ContextCompat.checkSelfPermission(this,permission) != PackageManager.PERMISSION_GRANTED)
+            requests.add(permission);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        checkAndRequestAllPermissions();
+
         setContentView(R.layout.activity_speech_recognizer_test_main);
+
+        if (!SpeechRecognizer.isRecognitionAvailable(getApplicationContext())) System.exit(42);
         SRIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         SRIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, "de-AT");
-        //sro = SpeechRecognizer.createSpeechRecognizer(getApplicationContext());
-
+        sro = SpeechRecognizer.createSpeechRecognizer(getApplicationContext());
+        listener = new SRListener(this);
 
         findViewById(R.id.btSpeak).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                startActivityForResult(SRIntent, SPEECH_2_TEXT_REQUEST);
+                sro.startListening(SRIntent);
+                //listener.listen();
+                //startActivityForResult(SRIntent, SPEECH_2_TEXT_REQUEST);
+                //((TextView)(findViewById(R.id.textOut))).append(listener.what() +"\n");
             }
         });
  /*   }
@@ -63,6 +94,7 @@ public class SpeechRecognizerTestMain extends AppCompatActivity {
                     //voices= (Voice[])tts.getVoices().toArray();
                     Button drck = (Button) findViewById(R.id.btDrck);
                     drck.setEnabled(true);
+
                     drck.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
@@ -82,8 +114,28 @@ public class SpeechRecognizerTestMain extends AppCompatActivity {
         //Log.i("OnPause", "entered");
         //ttsInitialized.close();
         //tts.shutdown();
+        sro.stopListening();
         super.onPause();
     }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        if (requestCode==PERMISSIONS_CORE) {
+            for (int i:grantResults) {
+                if (i!=PackageManager.PERMISSION_GRANTED) System.exit(99);
+            }
+        }
+    }
+
+
+
+
+
+
+
+
+
 
     @Override
     protected void onActivityResult(int requestCode, final int resultCode, Intent data) {
@@ -102,7 +154,7 @@ public class SpeechRecognizerTestMain extends AppCompatActivity {
                     }
                 })*/
 
-                    List<String> result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+                        List<String> result = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
                     float[] confidence = data.getFloatArrayExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES);
 
                     TextView tv = (TextView) findViewById(R.id.textOut);
